@@ -239,8 +239,8 @@ export default function Dashboard({ session, profile }) {
         setError('Error al registrar tu asistencia.')
       } else if (buddyError) {
         console.error("Error amigo Supabase RLS:", buddyError)
-        setError('❌ Tu asistencia se guardó, pero la del acompañante fue rechazada por Supabase (Probables reglas de seguridad RLS).')
-        setSuccessMsg('✅ Tu asistencia fue registrada excitosamente.')
+        setError('Tu asistencia se guardó, pero la del acompañante fue rechazada por seguridad de Supabase (RLS).')
+        setSuccessMsg('Tu asistencia fue registrada exitosamente.')
         fetchLeaderboard()
         fetchWeeklyCheckins()
       } else {
