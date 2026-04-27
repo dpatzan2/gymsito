@@ -129,7 +129,6 @@ export default function Dashboard({ session, profile }) {
       getLocation()
     }
     init()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Asignar el stream al elemento de video una vez que se renderice en pantalla
@@ -147,7 +146,7 @@ export default function Dashboard({ session, profile }) {
       })
       setStream(mediaStream)
     } catch (err) {
-      setError('No pudimos acceder a la cámara. Revisa los permisos.')
+      setError('No pudimos acceder a la cámara. Revisa los permisos.' + err.message)
     }
   }
 
@@ -220,7 +219,7 @@ export default function Dashboard({ session, profile }) {
           photo_url: photoUrl,
           user_latitude: location.lat,
           user_longitude: location.lng,
-          is_comodin: false, // Para el amigo no asignamos comodín automático
+          is_comodin: false,
           replaced_day: null
         })
       }
