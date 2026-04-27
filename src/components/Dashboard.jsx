@@ -212,8 +212,11 @@ export default function Dashboard({ session, profile }) {
         }
       ]
 
+      const { error: insertError } = await supabase.from('check_ins').insert(inserts)
+
+      let buddyError = null
       if (selectedBuddy) {
-        inserts.push({
+        const buddyInsert = {
           user_id: selectedBuddy,
           gym_id: nearestGym.id,
           photo_url: photoUrl,
@@ -221,19 +224,27 @@ export default function Dashboard({ session, profile }) {
           user_longitude: location.lng,
           is_comodin: false,
           replaced_day: null
-        })
+        }
+        const { error: bErr } = await supabase.from('check_ins').insert(buddyInsert)
+        buddyError = bErr
       }
-
-      const { error: insertError } = await supabase.from('check_ins').insert(inserts)
 
       setCheckingIn(false)
       stopCamera()
+      
+      const hadBuddy = selectedBuddy
       setSelectedBuddy('')
 
       if (insertError) {
-        setError('Error al registrar la asistencia.')
+        setError('Error al registrar tu asistencia.')
+      } else if (buddyError) {
+        console.error("Error amigo Supabase RLS:", buddyError)
+        setError('❌ Tu asistencia se guardó, pero la del acompañante fue rechazada por Supabase (Probables reglas de seguridad RLS).')
+        setSuccessMsg('✅ Tu asistencia fue registrada excitosamente.')
+        fetchLeaderboard()
+        fetchWeeklyCheckins()
       } else {
-        setSuccessMsg(selectedBuddy 
+        setSuccessMsg(hadBuddy 
           ? `Asistencia doble registrada en ${nearestGym.name}.` 
           : `Asistencia registrada en ${nearestGym.name}.`
         )
@@ -244,14 +255,16 @@ export default function Dashboard({ session, profile }) {
         if (navigator.share) {
           try {
             const file = new File([blob], fileName, { type: 'image/jpeg' })
-            // Compartir el archivo directamente si el dispositivo lo soporta, sino el enlace
+            
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
               await navigator.share({
+                title: nearestGym.name,
                 text: nearestGym.name,
                 files: [file]
               })
             } else {
               await navigator.share({
+                title: nearestGym.name,
                 text: nearestGym.name,
                 url: photoUrl
               })
