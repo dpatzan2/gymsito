@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
 import UserHistory from './UserHistory'
 
@@ -87,6 +87,40 @@ export default function Dashboard({ session, profile }) {
     }
   }
 
+  // Calcular distancia usando fórmula de Haversine
+  const getDistanceFromLatLonInMeters = (lat1, lon1, lat2, lon2) => {
+    const R = 6371000 // Radio de la Tierra en metros
+    const dLat = (lat2 - lat1) * (Math.PI / 180)
+    const dLon = (lon2 - lon1) * (Math.PI / 180)
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c
+  }
+
+  const { nearestGym, distanceToGym } = useMemo(() => {
+    if (location && gyms.length > 0) {
+      let closestGym = null
+      let minDistance = Infinity
+
+      gyms.forEach(gym => {
+        const dist = getDistanceFromLatLonInMeters(
+          location.lat, location.lng, 
+          gym.latitude, gym.longitude
+        )
+        if (dist < minDistance) {
+          minDistance = dist
+          closestGym = gym
+        }
+      })
+
+      return { nearestGym: closestGym, distanceToGym: Math.round(minDistance) }
+    }
+    return { nearestGym: null, distanceToGym: null }
+  }, [location, gyms])
+
   useEffect(() => {
     const init = async () => {
       await fetchGyms()
@@ -101,7 +135,7 @@ export default function Dashboard({ session, profile }) {
   const startCamera = async () => {
     setError('')
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
       setStream(mediaStream)
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream
@@ -124,9 +158,13 @@ export default function Dashboard({ session, profile }) {
       return
     }
     
-    const nearestGym = gyms[0] 
     if (!nearestGym) {
       setError('No hay gimnasios registrados en el sistema.')
+      return
+    }
+
+    if (distanceToGym > 50) {
+      setError(`Estás a ${distanceToGym}m de ${nearestGym.name}. Debes estar a menos de 50m.`)
       return
     }
 
@@ -196,6 +234,27 @@ export default function Dashboard({ session, profile }) {
         )
         fetchLeaderboard()
         fetchWeeklyCheckins() // Recargar progreso semanal
+
+        // Abrir el menú nativo para compartir (WhatsApp, etc.)
+        if (navigator.share) {
+          try {
+            const file = new File([blob], fileName, { type: 'image/jpeg' })
+            // Compartir el archivo directamente si el dispositivo lo soporta, sino el enlace
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+              await navigator.share({
+                text: nearestGym.name,
+                files: [file]
+              })
+            } else {
+              await navigator.share({
+                text: nearestGym.name,
+                url: photoUrl
+              })
+            }
+          } catch (err) {
+            console.log('El usuario canceló o hubo un error al compartir:', err)
+          }
+        }
       }
     }, 'image/jpeg')
   }
@@ -324,11 +383,31 @@ export default function Dashboard({ session, profile }) {
 
           {/* Estado de validación */}
           <div className="mb-6 w-full flex flex-col items-center gap-3">
-            {location ? (
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded bg-gray-50 border border-gray-200 text-gray-700 text-xs font-medium">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
-                Ubicación verificada
-              </span>
+            {location && nearestGym ? (
+              <div className="w-full flex flex-col items-center gap-2">
+                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded border text-xs font-medium ${
+                  distanceToGym <= 50 
+                    ? 'bg-green-50 border-green-200 text-green-700' 
+                    : 'bg-red-50 border-red-200 text-red-700'
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${distanceToGym <= 50 ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                  {distanceToGym <= 50 
+                    ? `Ubicación válida a ${distanceToGym}m` 
+                    : `Muy lejos de ${nearestGym.name} (${distanceToGym}m). Máx 50m.`}
+                </div>
+                
+                {distanceToGym <= 50 && (
+                  <div className="w-full mt-1 p-3 bg-gray-50 border border-gray-200 rounded-xl flex border-l-4 border-l-black items-center gap-3 text-left">
+                    <div className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-800 shadow-sm shrink-0">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    </div>
+                    <div className="overflow-hidden">
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Gimnasio Confirmado</p>
+                      <h4 className="font-semibold text-gray-900 truncate text-sm">{nearestGym.name}</h4>
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : error ? (
               <div className="bg-red-50 text-red-700 px-4 py-3 rounded-lg text-sm flex flex-col items-center w-full">
                 <span>{error}</span>
@@ -336,7 +415,7 @@ export default function Dashboard({ session, profile }) {
               </div>
             ) : (
               <span className="inline-flex items-center gap-2 px-3 py-1.5 text-gray-500 text-xs font-medium">
-                Buscando ubicación...
+                Buscando tu gimnasio más cercano...
               </span>
             )}
             
@@ -351,7 +430,8 @@ export default function Dashboard({ session, profile }) {
           {!stream ? (
             <button 
               onClick={startCamera} 
-              className="px-6 py-3 w-full max-w-xs font-medium text-white transition-colors bg-black rounded-lg hover:bg-gray-800"
+              disabled={!nearestGym || distanceToGym > 50}
+              className="px-6 py-3 w-full max-w-xs font-medium text-white transition-colors bg-black rounded-lg hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               Abrir Cámara
             </button>
@@ -364,15 +444,40 @@ export default function Dashboard({ session, profile }) {
                   <p className="text-xs font-semibold text-orange-800 mb-1">
                     Hoy no es tu día asignado
                   </p>
-                  <label className="flex items-center gap-2 text-sm text-orange-800 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={useComodin}
-                      onChange={(e) => setUseComodin(e.target.checked)}
-                      className="rounded text-orange-600 focus:ring-orange-500" 
-                    />
-                    Usar un comodín para hoy
-                  </label>
+                  {(() => {
+                    const dayNames = {1:'Lunes', 2:'Martes', 3:'Miércoles', 4:'Jueves', 5:'Viernes', 6:'Sábado', 7:'Domingo'}
+                    const availableMissedDays = profile?.target_days?.filter(day => 
+                      !weeklyCheckins.includes(day) && !replacedCheckins.includes(day)
+                    ) || []
+
+                    if (availableMissedDays.length === 0) {
+                      return (
+                        <p className="text-xs text-orange-700 mt-1">
+                          No tienes días pendientes por reponer en tu meta.
+                        </p>
+                      )
+                    }
+
+                    return (
+                      <div className="mt-2">
+                        <label className="block text-xs font-medium text-orange-800 mb-1">
+                          Usar comodín para reponer:
+                        </label>
+                        <select
+                          value={replacedDay}
+                          onChange={(e) => setReplacedDay(e.target.value)}
+                          className="w-full p-2 border border-orange-200 rounded text-sm bg-white text-orange-900 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                        >
+                          <option value="">No usar comodín (solo asistir)</option>
+                          {availableMissedDays.map(day => (
+                            <option key={day} value={day}>
+                              Día {dayNames[day]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
 
