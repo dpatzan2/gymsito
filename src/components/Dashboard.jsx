@@ -132,15 +132,21 @@ export default function Dashboard({ session, profile }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Asignar el stream al elemento de video una vez que se renderice en pantalla
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream
+    }
+  }, [stream])
+
   const startCamera = async () => {
     setError('')
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: { ideal: 'environment' } } 
+      })
       setStream(mediaStream)
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream
-      }
-    } catch {
+    } catch (err) {
       setError('No pudimos acceder a la cámara. Revisa los permisos.')
     }
   }
