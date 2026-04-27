@@ -91,9 +91,17 @@ export default function TargetDaysForm({ user, onComplete }) {
           <button 
             type="submit" 
             disabled={saving}
-            className="w-full py-3 px-4 bg-black text-white text-sm font-medium rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors"
+            className="w-full py-3 px-4 bg-black text-white text-sm font-medium rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-gray-800 transition-colors mb-4"
           >
             {saving ? 'Guardando configuración...' : 'Continuar'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => supabase.auth.signOut()}
+            className="w-full py-3 px-4 bg-white text-gray-700 border border-gray-200 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Cerrar Sesión
           </button>
         </form>
       </div>
