@@ -168,8 +168,8 @@ export default function Dashboard({ session, profile }) {
       return
     }
 
-    if (distanceToGym > 50) {
-      setError(`Estás a ${distanceToGym}m de ${nearestGym.name}. Debes estar a menos de 50m.`)
+    if (distanceToGym > 150) {
+      setError(`Estás a ${distanceToGym}m de ${nearestGym.name}. Debes estar a menos de 100m.`)
       return
     }
 
@@ -404,17 +404,17 @@ export default function Dashboard({ session, profile }) {
             {location && nearestGym ? (
               <div className="w-full flex flex-col items-center gap-2">
                 <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded border text-xs font-medium ${
-                  distanceToGym <= 50 
+                  distanceToGym <= 100 
                     ? 'bg-green-50 border-green-200 text-green-700' 
                     : 'bg-red-50 border-red-200 text-red-700'
                 }`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${distanceToGym <= 50 ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                  {distanceToGym <= 50 
+                  <span className={`h-1.5 w-1.5 rounded-full ${distanceToGym <= 100 ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                  {distanceToGym <= 100 
                     ? `Ubicación válida a ${distanceToGym}m` 
-                    : `Muy lejos de ${nearestGym.name} (${distanceToGym}m). Máx 50m.`}
+                    : `Muy lejos de ${nearestGym.name} (${distanceToGym}m). Máx 100m.`}
                 </div>
                 
-                {distanceToGym <= 50 && (
+                {distanceToGym <= 100 && (
                   <div className="w-full mt-1 p-3 bg-gray-50 border border-gray-200 rounded-xl flex border-l-4 border-l-black items-center gap-3 text-left">
                     <div className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-800 shadow-sm shrink-0">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
@@ -448,7 +448,7 @@ export default function Dashboard({ session, profile }) {
           {!stream ? (
             <button 
               onClick={startCamera} 
-              disabled={!nearestGym || distanceToGym > 50}
+              disabled={!nearestGym || distanceToGym > 100}
               className="px-6 py-3 w-full max-w-xs font-medium text-white transition-colors bg-black rounded-lg hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
               Abrir Cámara
