@@ -673,7 +673,7 @@ export default function Dashboard({ session, profile }) {
               <h3 className="text-lg font-semibold text-gray-900">Ranking</h3>
               <p className="text-sm text-gray-500">Compara tus asistencias este mes.</p>
             </div>
-            {  leaderboard.length > 0 && (
+            { leaderboard.length > 0 && (
               <button 
                 onClick={shareLeaderboard}
                 className="text-xs font-bold bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
@@ -686,20 +686,17 @@ export default function Dashboard({ session, profile }) {
 
           {/* End of month banner */}
           {(
-            <div className="mb-5 bg-gradient-to-r from-gray-800 to-black p-4 rounded-xl shadow text-white flex flex-col gap-3">
-              <div>
-                <h4 className="font-bold text-sm">Resultados finales del mes</h4>
-                <p className="text-gray-300 text-xs mt-0.5">
-                  Confirmación requerida {resetStatus.readyCount}/{resetStatus.totalCount}. Cuando todos confirmen, el progreso de todos se reiniciará.
-                </p>
-              </div>
+            <div className="mb-5">
               <button 
                 onClick={resetMyMonth}
                 disabled={isResetting || resetStatus.isReady}
-                className="bg-white disabled:bg-gray-400 text-black font-semibold text-xs px-4 py-2.5 rounded-lg shadow-sm hover:bg-gray-100 transition-colors w-full"
+                className="w-full bg-gray-100 text-gray-800 border border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 font-semibold text-sm px-4 py-3 rounded-lg transition-colors"
               >
-                {isResetting ? 'Procesando...' : resetStatus.isReady ? 'Confirmación enviada ✔️' : 'Confirmar Reinicio Global'}
+                {isResetting ? 'Procesando...' : resetStatus.isReady ? 'Confirmado ✔️' : 'Reiniciar Mes'}
               </button>
+              <p className="text-center text-xs text-gray-500 mt-2">
+                Faltan {resetStatus.totalCount - resetStatus.readyCount} confirmaciones
+              </p>
             </div>
           )}
 
