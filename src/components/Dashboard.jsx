@@ -56,7 +56,7 @@ export default function Dashboard({ session, profile }) {
 
       // 3. Si no todos han confirmado, mostrar mensaje de que se espera a los demás
       if (readyCount < totalCount) {
-        setSuccessMsg(`¡Has confirmado! Esperando a que los demás también confirmen (${readyCount}/${totalCount}) para borrar todo.`)
+        setSuccessMsg(`Faltan (${readyCount}/${totalCount}) para borrar todo.`)
         return
       }
 
@@ -673,7 +673,7 @@ export default function Dashboard({ session, profile }) {
               <h3 className="text-lg font-semibold text-gray-900">Ranking</h3>
               <p className="text-sm text-gray-500">Compara tus asistencias este mes.</p>
             </div>
-            { leaderboard.length > 0 && (
+            {isLastDayOfMonth && leaderboard.length > 0 && (
               <button 
                 onClick={shareLeaderboard}
                 className="text-xs font-bold bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
@@ -685,7 +685,7 @@ export default function Dashboard({ session, profile }) {
           </div>
 
           {/* End of month banner */}
-          {(
+          {isLastDayOfMonth && (
             <div className="mb-5">
               <button 
                 onClick={resetMyMonth}
