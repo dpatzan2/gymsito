@@ -17,55 +17,89 @@ export default function Dashboard({ session, profile }) {
   const [comodinCheckins, setComodinCheckins] = useState([])
   const [replacedCheckins, setReplacedCheckins] = useState([])
   const [isResetting, setIsResetting] = useState(false)
+  const [resetStatus, setResetStatus] = useState({ readyCount: 0, totalCount: 0, isReady: false })
   const videoRef = useRef(null)
 
   // Detectar si hoy es un dia programado (1=Lunes, 7=Domingo)
   const todayDateObj = new Date()
   const today = todayDateObj.getDay() || 7 
   const isTargetDay = profile?.target_days?.includes(today)
-  const isEndOfMonthWindow = todayDateObj.getDate() >= 28 || todayDateObj.getDate() <= 3
+  
+  // Es exactamente el último día del mes
+  const isLastDayOfMonth = todayDateObj.getDate() === new Date(todayDateObj.getFullYear(), todayDateObj.getMonth() + 1, 0).getDate()
 
   const resetMyMonth = async () => {
-    if (!window.confirm('¿Estás seguro de que quieres reiniciar tu mes? Esto borrará tus asistencias y fotos.')) return
+    if (!window.confirm('¿Estás listo para finalizar el mes? Tu progreso se borrará cuando todos los usuarios lo confirmen.')) return
     
     setIsResetting(true)
+    setError('')
     try {
-      // Obtener todas las asistencias del usuario para sacar los URLs de las fotos
-      const { data: checkinsData } = await supabase
+      // 1. Marcar al usuario logueado como "listo para reset"
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ ready_to_reset: true })
+        .eq('id', session.user.id)
+
+      if (updateError) throw updateError
+
+      // 2. Obtener de nuevo todos los status para ver si ya están todos listos
+      const { data: profilesData } = await supabase.from('profiles').select('id, ready_to_reset')
+      const allProfiles = profilesData || []
+      const totalCount = allProfiles.length
+      const readyCount = allProfiles.filter(p => p.ready_to_reset).length
+      
+      setResetStatus({
+        totalCount,
+        readyCount,
+        isReady: true
+      })
+
+      // 3. Si no todos han confirmado, mostrar mensaje de que se espera a los demás
+      if (readyCount < totalCount) {
+        setSuccessMsg(`¡Has confirmado! Esperando a que los demás también confirmen (${readyCount}/${totalCount}) para borrar todo.`)
+        return
+      }
+
+      // == SI LLEGAMOS AQUI ES PORQUE TODOS ESTAN LISTOS ==
+      setSuccessMsg('¡Todos han confirmado! Reiniciando datos generales...')
+
+      // 4. Borrar TODO de 'check_ins' y fotos del 'storage' globalmente
+      const { data: allCheckins } = await supabase
         .from('check_ins')
         .select('photo_url')
-        .eq('user_id', session.user.id)
 
-      if (checkinsData && checkinsData.length > 0) {
-        // Extraer el nombre del archivo de las URLs
-        const filesToDelete = checkinsData
-          .filter(c => c.photo_url)
-          .map(c => {
-            const urlParts = c.photo_url.split('/')
-            return urlParts[urlParts.length - 1] // El nombre es el ultimo segmento
-          })
+      if (allCheckins && allCheckins.length > 0) {
+        const filesToDelete = allCheckins
+          .map(c => c.photo_url)
           .filter(Boolean)
+          .map(url => {
+            const urlParts = url.split('/')
+            return urlParts[urlParts.length - 1]
+          })
 
         if (filesToDelete.length > 0) {
-          // Eliminar imagenes del storage
           await supabase.storage.from('gymsito').remove(filesToDelete)
         }
       }
 
-      // Eliminar los registros de la base de datos
-      const { error: deleteError } = await supabase
-        .from('check_ins')
-        .delete()
-        .eq('user_id', session.user.id)
+      // Borrar registros en bbdd
+      await supabase.from('check_ins').delete().neq('user_id', '00000000-0000-0000-0000-000000000000')
 
-      if (deleteError) throw deleteError
+      // 5. Restablecer 'ready_to_reset' a false
+      await supabase
+        .from('profiles')
+        .update({ ready_to_reset: false })
+        .neq('id', '00000000-0000-0000-0000-000000000000')
 
-      setSuccessMsg('¡Mensualidad reiniciada correctamente!')
+      setSuccessMsg('¡El mes ha sido reiniciado con éxito para todos!')
+      
+      // Actualizar datos
       fetchLeaderboard()
       fetchWeeklyCheckins()
+      fetchResetStatus()
     } catch (err) {
       console.error(err)
-      setError('Hubo un error al reiniciar tu mes.')
+      setError('Hubo un error al confirmar tu reinicio mensual.')
     } finally {
       setIsResetting(false)
     }
@@ -115,6 +149,23 @@ export default function Dashboard({ session, profile }) {
   const fetchLeaderboard = async () => {
     const { data } = await supabase.from('leaderboard').select('*')
     if (data) setLeaderboard(data)
+  }
+
+  const fetchResetStatus = async () => {
+    const { data } = await supabase.from('profiles').select('id, ready_to_reset')
+    if (data) {
+      const totalCount = data.length
+      const readyCount = data.filter(p => p.ready_to_reset).length
+      
+      const myProfile = data.find(p => p.id === session.user.id)
+      const isReady = myProfile?.ready_to_reset || false
+
+      setResetStatus({
+        totalCount,
+        readyCount,
+        isReady
+      })
+    }
   }
 
   const getLocation = () => {
@@ -175,6 +226,7 @@ export default function Dashboard({ session, profile }) {
       await fetchGyms()
       await fetchLeaderboard()
       await fetchWeeklyCheckins()
+      await fetchResetStatus()
       getLocation()
     }
     init()
@@ -621,7 +673,7 @@ export default function Dashboard({ session, profile }) {
               <h3 className="text-lg font-semibold text-gray-900">Ranking</h3>
               <p className="text-sm text-gray-500">Compara tus asistencias este mes.</p>
             </div>
-            {isEndOfMonthWindow && leaderboard.length > 0 && (
+            {isLastDayOfMonth && leaderboard.length > 0 && (
               <button 
                 onClick={shareLeaderboard}
                 className="text-xs font-bold bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
@@ -633,18 +685,20 @@ export default function Dashboard({ session, profile }) {
           </div>
 
           {/* End of month banner */}
-          {isEndOfMonthWindow && (
+          {isLastDayOfMonth && (
             <div className="mb-5 bg-gradient-to-r from-gray-800 to-black p-4 rounded-xl shadow text-white flex flex-col gap-3">
               <div>
                 <h4 className="font-bold text-sm">Resultados finales del mes</h4>
-                <p className="text-gray-300 text-xs mt-0.5">Ya puedes reiniciar tu progreso para iniciar el siguiente mes.</p>
+                <p className="text-gray-300 text-xs mt-0.5">
+                  Confirmación requerida {resetStatus.readyCount}/{resetStatus.totalCount}. Cuando todos confirmen, el progreso de todos se reiniciará.
+                </p>
               </div>
               <button 
                 onClick={resetMyMonth}
-                disabled={isResetting}
-                className="bg-white text-black font-semibold text-xs px-4 py-2.5 rounded-lg shadow-sm hover:bg-gray-100 transition-colors w-full"
+                disabled={isResetting || resetStatus.isReady}
+                className="bg-white disabled:bg-gray-400 text-black font-semibold text-xs px-4 py-2.5 rounded-lg shadow-sm hover:bg-gray-100 transition-colors w-full"
               >
-                {isResetting ? 'Reiniciando...' : 'Reiniciar mis asistencias'}
+                {isResetting ? 'Procesando...' : resetStatus.isReady ? 'Confirmación enviada ✔️' : 'Confirmar Reinicio Global'}
               </button>
             </div>
           )}
