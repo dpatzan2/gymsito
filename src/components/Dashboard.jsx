@@ -692,7 +692,7 @@ export default function Dashboard({ session, profile }) {
                 disabled={isResetting || resetStatus.isReady}
                 className="w-full bg-gray-100 text-gray-800 border border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 font-semibold text-sm px-4 py-3 rounded-lg transition-colors"
               >
-                {isResetting ? 'Procesando...' : resetStatus.isReady ? 'Confirmado ✔️' : 'Reiniciar Mes'}
+                {isResetting ? 'Procesando...' : resetStatus.isReady ? 'Confirmado ✔️' : 'Reiniciar'}
               </button>
               <p className="text-center text-xs text-gray-500 mt-2">
                 Faltan {resetStatus.totalCount - resetStatus.readyCount} confirmaciones
