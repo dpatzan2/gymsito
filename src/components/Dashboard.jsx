@@ -673,7 +673,7 @@ export default function Dashboard({ session, profile }) {
               <h3 className="text-lg font-semibold text-gray-900">Ranking</h3>
               <p className="text-sm text-gray-500">Compara tus asistencias este mes.</p>
             </div>
-            {isLastDayOfMonth && leaderboard.length > 0 && (
+            {  leaderboard.length > 0 && (
               <button 
                 onClick={shareLeaderboard}
                 className="text-xs font-bold bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
@@ -685,7 +685,7 @@ export default function Dashboard({ session, profile }) {
           </div>
 
           {/* End of month banner */}
-          {isLastDayOfMonth && (
+          {(
             <div className="mb-5 bg-gradient-to-r from-gray-800 to-black p-4 rounded-xl shadow text-white flex flex-col gap-3">
               <div>
                 <h4 className="font-bold text-sm">Resultados finales del mes</h4>
