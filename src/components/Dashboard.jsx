@@ -16,11 +16,60 @@ export default function Dashboard({ session, profile }) {
   const [weeklyCheckins, setWeeklyCheckins] = useState([])
   const [comodinCheckins, setComodinCheckins] = useState([])
   const [replacedCheckins, setReplacedCheckins] = useState([])
+  const [isResetting, setIsResetting] = useState(false)
   const videoRef = useRef(null)
 
   // Detectar si hoy es un dia programado (1=Lunes, 7=Domingo)
-  const today = new Date().getDay() || 7 
+  const todayDateObj = new Date()
+  const today = todayDateObj.getDay() || 7 
   const isTargetDay = profile?.target_days?.includes(today)
+  const isEndOfMonthWindow = todayDateObj.getDate() >= 28 || todayDateObj.getDate() <= 3
+
+  const resetMyMonth = async () => {
+    if (!window.confirm('¿Estás seguro de que quieres reiniciar tu mes? Esto borrará tus asistencias y fotos.')) return
+    
+    setIsResetting(true)
+    try {
+      // Obtener todas las asistencias del usuario para sacar los URLs de las fotos
+      const { data: checkinsData } = await supabase
+        .from('check_ins')
+        .select('photo_url')
+        .eq('user_id', session.user.id)
+
+      if (checkinsData && checkinsData.length > 0) {
+        // Extraer el nombre del archivo de las URLs
+        const filesToDelete = checkinsData
+          .filter(c => c.photo_url)
+          .map(c => {
+            const urlParts = c.photo_url.split('/')
+            return urlParts[urlParts.length - 1] // El nombre es el ultimo segmento
+          })
+          .filter(Boolean)
+
+        if (filesToDelete.length > 0) {
+          // Eliminar imagenes del storage
+          await supabase.storage.from('gymsito').remove(filesToDelete)
+        }
+      }
+
+      // Eliminar los registros de la base de datos
+      const { error: deleteError } = await supabase
+        .from('check_ins')
+        .delete()
+        .eq('user_id', session.user.id)
+
+      if (deleteError) throw deleteError
+
+      setSuccessMsg('¡Mensualidad reiniciada correctamente!')
+      fetchLeaderboard()
+      fetchWeeklyCheckins()
+    } catch (err) {
+      console.error(err)
+      setError('Hubo un error al reiniciar tu mes.')
+    } finally {
+      setIsResetting(false)
+    }
+  }
 
   const fetchWeeklyCheckins = async () => {
     const now = new Date()
@@ -281,9 +330,27 @@ export default function Dashboard({ session, profile }) {
     return <UserHistory user={viewingUser} onBack={() => setViewingUser(null)} />
   }
 
+  const shareLeaderboard = async () => {
+    try {
+      if (navigator.share) {
+        let textResult = 'Resultados Mensuales\n\n'
+        leaderboard.forEach((u, idx) => {
+          textResult += `${idx + 1}. ${u.full_name.split(' ')[0]} - ${u.total_attendances} Asistencias\n`
+        })
+
+        await navigator.share({
+          title: 'Resultados Mensuales',
+          text: textResult
+        })
+      }
+    } catch (err) {
+      console.log('Error al compartir resultados', err)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-4 font-sans flex justify-center">
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-md space-y-4">
         
         {/* Header */}
         <header className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
@@ -445,7 +512,11 @@ export default function Dashboard({ session, profile }) {
           </div>
 
           {/* Area de Camara */}
-          {!stream ? (
+          {(weeklyCheckins.includes(today) || comodinCheckins.includes(today)) ? (
+            <div className="bg-blue-50 border border-blue-100 text-blue-700 px-4 py-3 rounded-lg text-sm w-full max-w-xs mb-2">
+              <span className="font-semibold block mb-1">Asistencia marcada para hoy</span>
+            </div>
+          ) : !stream ? (
             <button 
               onClick={startCamera} 
               disabled={!nearestGym || distanceToGym > 100}
@@ -544,12 +615,40 @@ export default function Dashboard({ session, profile }) {
         </section>
 
         {/* Leaderboard */}
-        <section className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">Ranking</h3>
-            <p className="text-sm text-gray-500">Compara tus asistencias este mes.</p>
+        <section className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mb-8">
+          <div className="mb-6 flex justify-between items-end gap-2">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Ranking</h3>
+              <p className="text-sm text-gray-500">Compara tus asistencias este mes.</p>
+            </div>
+            {isEndOfMonthWindow && leaderboard.length > 0 && (
+              <button 
+                onClick={shareLeaderboard}
+                className="text-xs font-bold bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors"
+                title="Compartir resultados finales"
+              >
+                Compartir
+              </button>
+            )}
           </div>
-          
+
+          {/* End of month banner */}
+          {isEndOfMonthWindow && (
+            <div className="mb-5 bg-gradient-to-r from-gray-800 to-black p-4 rounded-xl shadow text-white flex flex-col gap-3">
+              <div>
+                <h4 className="font-bold text-sm">Resultados finales del mes</h4>
+                <p className="text-gray-300 text-xs mt-0.5">Ya puedes reiniciar tu progreso para iniciar el siguiente mes.</p>
+              </div>
+              <button 
+                onClick={resetMyMonth}
+                disabled={isResetting}
+                className="bg-white text-black font-semibold text-xs px-4 py-2.5 rounded-lg shadow-sm hover:bg-gray-100 transition-colors w-full"
+              >
+                {isResetting ? 'Reiniciando...' : 'Reiniciar mis asistencias'}
+              </button>
+            </div>
+          )}
+
           <div className="space-y-3">
             {leaderboard.length === 0 ? (
               <div className="text-center py-6 text-sm text-gray-500 bg-gray-50 rounded-lg border border-gray-100">
