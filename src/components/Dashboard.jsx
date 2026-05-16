@@ -154,15 +154,6 @@ export default function Dashboard({ session, profile }) {
     
     if (!profiles) return
 
-    // Utilidad para obtener el número de semana de una fecha
-    const getWeekNumber = (d) => {
-      const date = new Date(d);
-      date.setHours(0, 0, 0, 0);
-      date.setDate(date.getDate() + 3 - (date.getDay() || 7));
-      const week1 = new Date(date.getFullYear(), 0, 4);
-      return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() || 7)) / 7);
-    }
-
     const today = new Date()
 
     const board = profiles.map(p => {
@@ -175,17 +166,17 @@ export default function Dashboard({ session, profile }) {
 
       const userCheckins = (checkins || []).filter(c => c.user_id === p.id)
       
-      // Agrupar checkins por semana para aplicar el límite semanal
-      const checkinsByWeek = {}
-      userCheckins.forEach(c => {
-        const week = getWeekNumber(c.created_at)
-        checkinsByWeek[week] = (checkinsByWeek[week] || 0) + 1
-      })
-
-      // Sumar asistencias validas (topeadas por la meta semanal de este usuario)
+      // Contar una asistencia si se hizo en el dia marcado como objetivo O si se marcó como comodín
       let validAttendances = 0
-      Object.values(checkinsByWeek).forEach(count => {
-        validAttendances += Math.min(count, targetCount)
+      userCheckins.forEach(c => {
+        const d = new Date(c.created_at)
+        // Ignorar de otros meses que puedan haberse colado
+        if (d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()) {
+          const dayOfWeek = d.getDay() || 7
+          if (targetDays.includes(dayOfWeek) || c.is_comodin) {
+            validAttendances++
+          }
+        }
       })
 
       // Calcular cuántos días de su meta particular han pasado en el mes hasta hoy
