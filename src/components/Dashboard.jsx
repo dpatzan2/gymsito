@@ -199,6 +199,7 @@ export default function Dashboard({ session, profile }) {
 
       return {
         ...p,
+        user_id: p.id,
         total_attendances: validAttendances,
         scorePercentage
       }
