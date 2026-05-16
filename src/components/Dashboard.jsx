@@ -78,7 +78,8 @@ export default function Dashboard({ session, profile }) {
           })
 
         if (filesToDelete.length > 0) {
-          await supabase.storage.from('gymsito').remove(filesToDelete)
+          const { error: storageError } = await supabase.storage.from('gymsito').remove(filesToDelete)
+          if (storageError) console.error("Error elminando del storage:", storageError)
         }
       }
 
@@ -147,8 +148,75 @@ export default function Dashboard({ session, profile }) {
   }
 
   const fetchLeaderboard = async () => {
-    const { data } = await supabase.from('leaderboard').select('*')
-    if (data) setLeaderboard(data)
+    // 1. Obtener perfiles y todos los checkins del mes
+    const { data: profiles } = await supabase.from('profiles').select('*')
+    const { data: checkins } = await supabase.from('check_ins').select('*')
+    
+    if (!profiles) return
+
+    // Utilidad para obtener el número de semana de una fecha
+    const getWeekNumber = (d) => {
+      const date = new Date(d);
+      date.setHours(0, 0, 0, 0);
+      date.setDate(date.getDate() + 3 - (date.getDay() || 7));
+      const week1 = new Date(date.getFullYear(), 0, 4);
+      return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() || 7)) / 7);
+    }
+
+    const today = new Date()
+
+    const board = profiles.map(p => {
+      const targetDays = p.target_days || []
+      const targetCount = targetDays.length
+      
+      if (targetCount === 0) {
+        return { ...p, total_attendances: 0, scorePercentage: 0 }
+      }
+
+      const userCheckins = (checkins || []).filter(c => c.user_id === p.id)
+      
+      // Agrupar checkins por semana para aplicar el límite semanal
+      const checkinsByWeek = {}
+      userCheckins.forEach(c => {
+        const week = getWeekNumber(c.created_at)
+        checkinsByWeek[week] = (checkinsByWeek[week] || 0) + 1
+      })
+
+      // Sumar asistencias validas (topeadas por la meta semanal de este usuario)
+      let validAttendances = 0
+      Object.values(checkinsByWeek).forEach(count => {
+        validAttendances += Math.min(count, targetCount)
+      })
+
+      // Calcular cuántos días de su meta particular han pasado en el mes hasta hoy
+      let expectedDaysSoFar = 0
+      for (let day = 1; day <= today.getDate(); day++) {
+        const d = new Date(today.getFullYear(), today.getMonth(), day)
+        const dayOfWeek = d.getDay() || 7
+        if (targetDays.includes(dayOfWeek)) {
+          expectedDaysSoFar++
+        }
+      }
+
+      let scorePercentage = 0
+      if (expectedDaysSoFar > 0) {
+        scorePercentage = Math.round((validAttendances / expectedDaysSoFar) * 100)
+      }
+      
+      // No pasar del 100%
+      scorePercentage = Math.min(scorePercentage, 100)
+
+      return {
+        ...p,
+        total_attendances: validAttendances,
+        scorePercentage
+      }
+    })
+
+    // Ordenar por porcentaje descendentemente
+    board.sort((a, b) => b.scorePercentage - a.scorePercentage || b.total_attendances - a.total_attendances)
+
+    setLeaderboard(board)
   }
 
   const fetchResetStatus = async () => {
@@ -387,7 +455,7 @@ export default function Dashboard({ session, profile }) {
       if (navigator.share) {
         let textResult = 'Resultados Mensuales\n\n'
         leaderboard.forEach((u, idx) => {
-          textResult += `${idx + 1}. ${u.full_name.split(' ')[0]} - ${u.total_attendances} Asistencias\n`
+          textResult += `${idx + 1}. ${u.full_name.split(' ')[0]} - ${u.scorePercentage}% Asistencia\n`
         })
 
         await navigator.share({
@@ -730,8 +798,8 @@ export default function Dashboard({ session, profile }) {
                   </div>
                   
                   <div className="text-right">
-                    <span className="block text-lg font-semibold text-gray-900">{user.total_attendances}</span>
-                    <span className="text-[10px] text-gray-500 uppercase tracking-wide">Asistencias</span>
+                    <span className="block text-lg font-semibold text-gray-900">{user.scorePercentage}%</span>
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wide">Asistencia</span>
                   </div>
                 </div>
               ))
