@@ -103,7 +103,7 @@ export default function UserHistory({ user, onBack }) {
           </button>
           
           <img 
-            src={user.avatar_url || 'https://via.placeholder.com/100'\} 
+            src={user.avatar_url || 'https://via.placeholder.com/100'} 
             alt={user.full_name} 
             className="w-10 h-10 rounded-full object-cover border border-gray-200" 
           />
