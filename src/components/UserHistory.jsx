@@ -8,12 +8,29 @@ export default function UserHistory({ user, onBack }) {
   
   const todayDateObj = new Date()
   
-  // Generar las semanas del mes actual
-  const weeks = useMemo(() => {
-    const y = todayDateObj.getFullYear()
-    const m = todayDateObj.getMonth()
-    const firstDay = new Date(y, m, 1)
-    const lastDay = new Date(y, m + 1, 0)
+  // Generar los ultimos meses
+  const months = useMemo(() => {
+    const d = new Date()
+    d.setDate(1) // Para evitar problemas de fin de mes
+    const m = []
+    for (let i = 0; i < 6; i++) {
+      const date = new Date(d.getFullYear(), d.getMonth() - i, 1)
+      m.push({
+        year: date.getFullYear(),
+        month: date.getMonth(),
+        label: date.toLocaleString('es-ES', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase())
+      })
+    }
+    return m
+  }, [])
+
+  const [selectedMonthIdx, setSelectedMonthIdx] = useState(0)
+  const selectedMonth = months[selectedMonthIdx]
+
+  // Obtener las semanas del mes seleccionado
+  const weeksInMonth = useMemo(() => {
+    const firstDay = new Date(selectedMonth.year, selectedMonth.month, 1)
+    const lastDay = new Date(selectedMonth.year, selectedMonth.month + 1, 0)
     
     let currentMonday = new Date(firstDay)
     const offset = currentMonday.getDay() === 0 ? 6 : currentMonday.getDay() - 1
@@ -26,20 +43,27 @@ export default function UserHistory({ user, onBack }) {
       sunday.setDate(sunday.getDate() + 6)
       sunday.setHours(23,59,59,999)
       
+      const days = []
+      for(let i=0; i<7; i++) {
+        const rD = new Date(currentMonday)
+        rD.setDate(rD.getDate() + i)
+        days.push({
+          date: rD,
+          id: i + 1, // 1=Lunes, 7=Domingo
+          label: rD.getDate().toString()
+        })
+      }
+      
       w.push({
         start: new Date(currentMonday),
         end: new Date(sunday),
-        label: `Semana del ${currentMonday.getDate()} al ${sunday.getDate()} ${sunday.toLocaleString('es-ES', {month: 'short'})}`
+        days
       })
       
       currentMonday.setDate(currentMonday.getDate() + 7)
     }
     return w
-  }, [todayDateObj.getFullYear(), todayDateObj.getMonth()])
-
-  // Encontrar en qué semana estamos
-  const currentWeekIndex = weeks.findIndex(w => todayDateObj >= w.start && todayDateObj <= w.end)
-  const [selectedWeekIdx, setSelectedWeekIdx] = useState(currentWeekIndex >= 0 ? currentWeekIndex : weeks.length - 1)
+  }, [selectedMonth])
 
   useEffect(() => {
     async function fetchHistory() {
@@ -67,27 +91,6 @@ export default function UserHistory({ user, onBack }) {
     fetchHistory()
   }, [user.user_id])
 
-  const selectedWeek = weeks[selectedWeekIdx] || weeks[0]
-  
-  // Extraer las asistencias limitadas a la semana seleccionada
-  const weekHistory = history.filter(record => {
-    const d = new Date(record.created_at)
-    return d >= selectedWeek.start && d <= selectedWeek.end
-  })
-
-  // Evitar duplicados matematicos en la visualizacion por precaucion
-  const weeklyCheckins = [...new Set(weekHistory
-    .filter(c => !c.is_comodin)
-    .map(c => new Date(c.created_at).getDay() || 7))]
-
-  const comodinCheckins = [...new Set(weekHistory
-    .filter(c => c.is_comodin)
-    .map(c => new Date(c.created_at).getDay() || 7))]
-
-  const replacedCheckins = [...new Set(weekHistory
-    .filter(c => c.replaced_day)
-    .map(c => c.replaced_day))]
-
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-4 font-sans flex justify-center">
       <div className="w-full max-w-md space-y-6">
@@ -114,7 +117,7 @@ export default function UserHistory({ user, onBack }) {
           </div>
         </header>
 
-        {/* Sección del Calendario / Timeline Semanal */}
+        {/* Sección del Calendario / Timeline Mensual */}
         <section className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <div className="mb-4 flex flex-col gap-2">
             <div className="flex justify-between items-center">
@@ -125,92 +128,106 @@ export default function UserHistory({ user, onBack }) {
             </div>
             
             <select
-              value={selectedWeekIdx}
-              onChange={(e) => setSelectedWeekIdx(Number(e.target.value))}
+              value={selectedMonthIdx}
+              onChange={(e) => setSelectedMonthIdx(Number(e.target.value))}
               className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-black transition-colors"
             >
-              {weeks.map((w, idx) => (
+              {months.map((m, idx) => (
                 <option key={idx} value={idx}>
-                  {w.label} {idx === currentWeekIndex ? '(Actual)' : ''}
+                  {m.label} {idx === 0 ? '(Actual)' : ''}
                 </option>
               ))}
             </select>
           </div>
           
-          <div className="flex justify-between items-center px-1 relative mt-6">
-            <div className="absolute top-5 left-4 right-4 h-0.5 bg-gray-100 -z-10"></div>
-            
-            {[
-              { id: 1, label: 'L' },
-              { id: 2, label: 'M' },
-              { id: 3, label: 'X' },
-              { id: 4, label: 'J' },
-              { id: 5, label: 'V' },
-              { id: 6, label: 'S' },
-              { id: 7, label: 'D' }
-            ].map(day => {
-              const isTarget = user.target_days?.includes(day.id)
-              const hasAttendedNormal = weeklyCheckins.includes(day.id)
-              const hasAttendedComodin = comodinCheckins.includes(day.id)
-              const isReplaced = replacedCheckins.includes(day.id)
-              
-              // Determinar fechas exactas de este circulo
-              const dateOfCircle = new Date(selectedWeek.start)
-              dateOfCircle.setDate(dateOfCircle.getDate() + day.id - 1)
-              
-              const isCurrentDay = dateOfCircle.toDateString() === todayDateObj.toDateString()
-              const isPast = dateOfCircle < todayDateObj && !isCurrentDay
+          <div className="grid grid-cols-7 gap-x-2 gap-y-4 relative mt-2 pt-2">
+            {/* Cabecera L M X J V S D */}
+            {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((day, i) => (
+              <div key={i} className="text-center text-xs font-semibold text-gray-500 mb-1">
+                {day}
+              </div>
+            ))}
 
-              // Estilos
-              let circleClass = "w-10 h-10 rounded-full flex mx-auto items-center justify-center text-sm font-medium border-[2.5px] transition-all bg-white relative z-10 "
-              
-              if (hasAttendedNormal) {
-                circleClass += "border-green-500 text-green-600"
-              } else if (isReplaced) {
-                circleClass += "border-blue-400 text-blue-500 bg-blue-50"
-              } else if (hasAttendedComodin) {
-                circleClass += "border-blue-500 text-blue-600"
-              } else if (isTarget && isPast) {
-                circleClass += "border-red-400 text-red-500 bg-red-50"
-              } else if (isTarget && !isPast) {
-                circleClass += "border-gray-800 text-gray-800 border-dashed"
-              } else {
-                circleClass += "border-gray-200 text-gray-400"
-              }
+            {weeksInMonth.map((week, wIdx) => {
+              // Filtrar asistencias limitadas a esta semana específica
+              const weekHistory = history.filter(record => {
+                const d = new Date(record.created_at)
+                return d >= week.start && d <= week.end
+              })
 
-              return (
-                <div key={day.id} className="flex flex-col items-center gap-2">
-                  <div className={`relative ${isCurrentDay ? 'scale-110 mb-1' : ''}`}>
-                    <div className={circleClass}>
-                      {day.label}
+              const weeklyCheckins = [...new Set(weekHistory.filter(c => !c.is_comodin).map(c => new Date(c.created_at).getDay() || 7))]
+              const comodinCheckins = [...new Set(weekHistory.filter(c => c.is_comodin).map(c => new Date(c.created_at).getDay() || 7))]
+              const replacedCheckins = [...new Set(weekHistory.filter(c => c.replaced_day).map(c => c.replaced_day))]
+
+              return week.days.map((day) => {
+                const isTarget = user.target_days?.includes(day.id)
+                const hasAttendedNormal = weeklyCheckins.includes(day.id)
+                const hasAttendedComodin = comodinCheckins.includes(day.id)
+                const isReplaced = replacedCheckins.includes(day.id)
+                
+                const dateOfCircle = day.date
+                const isCurrentMonth = dateOfCircle.getMonth() === selectedMonth.month
+                
+                const isCurrentDay = dateOfCircle.toDateString() === todayDateObj.toDateString()
+                const isPast = dateOfCircle < todayDateObj && !isCurrentDay
+
+                let opacityClass = isCurrentMonth ? "" : "opacity-30"
+
+                let circleClass = `w-10 h-10 rounded-full flex mx-auto items-center justify-center text-sm font-medium border-[2.5px] transition-all bg-white relative z-10 ${opacityClass} `
+                
+                if (hasAttendedNormal) {
+                  circleClass += "border-green-500 text-green-600 font-bold"
+                } else if (isReplaced) {
+                  circleClass += "border-blue-400 text-blue-500 bg-blue-50 font-bold"
+                } else if (hasAttendedComodin) {
+                  circleClass += "border-blue-500 text-blue-600 font-bold"
+                } else if (isTarget && isPast) {
+                  circleClass += "border-red-400 text-red-500 bg-red-50"
+                } else if (isTarget && !isPast) {
+                  circleClass += "border-gray-800 text-gray-800 border-dashed"
+                } else {
+                  circleClass += "border-gray-200 text-gray-400 font-normal"
+                }
+
+                return (
+                  <div key={`${wIdx}-${day.id}`} className="flex flex-col items-center gap-1.5 relative">
+                    {/* Linea de fondo horizontal para la semana */}
+                    {day.id === 1 && (
+                      <div className="absolute top-5 left-4 w-[calc(700%-2rem)] h-0.5 bg-gray-100 -z-10 hidden sm:block"></div>
+                    )}
+                    
+                    <div className={`relative ${isCurrentDay ? 'scale-110' : ''}`}>
+                      <div className={circleClass}>
+                        <span className="text-[11px] sm:text-sm">{day.label}</span>
+                      </div>
+                      {isCurrentDay && (
+                        <div className="absolute inset-0 rounded-full ring-4 ring-orange-100 -z-10"></div>
+                      )}
                     </div>
-                    {isCurrentDay && (
-                      <div className="absolute inset-0 rounded-full ring-4 ring-orange-100 -z-10"></div>
-                    )}
+                    
+                    <div className={`h-4 flex items-center justify-center ${opacityClass}`}>
+                      {hasAttendedNormal && (
+                        <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                      )}
+                      {isReplaced && (
+                        <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                      )}
+                      {hasAttendedComodin && (
+                        <span className="text-[9px] bg-blue-100 text-blue-700 px-1 rounded uppercase tracking-wider font-bold">CMD</span>
+                      )}
+                      {isTarget && isPast && !hasAttendedNormal && !isReplaced && (
+                        <svg className="w-3.5 h-3.5 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                      )}
+                      {isTarget && !isPast && !hasAttendedNormal && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
+                      )}
+                      {!isTarget && !hasAttendedComodin && (
+                        <div className="w-1 h-1 rounded-full bg-gray-200"></div>
+                      )}
+                    </div>
                   </div>
-                  
-                  <div className="h-4 flex items-center justify-center">
-                    {hasAttendedNormal && (
-                      <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                    )}
-                    {isReplaced && (
-                      <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    )}
-                    {hasAttendedComodin && (
-                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded uppercase tracking-wider font-bold">CMDN</span>
-                    )}
-                    {isTarget && isPast && !hasAttendedNormal && !isReplaced && (
-                      <svg className="w-3.5 h-3.5 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                    )}
-                    {isTarget && !isPast && !hasAttendedNormal && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
-                    )}
-                    {!isTarget && !hasAttendedComodin && (
-                      <div className="w-1 h-1 rounded-full bg-gray-200"></div>
-                    )}
-                  </div>
-                </div>
-              )
+                )
+              })
             })}
           </div>
         </section>
