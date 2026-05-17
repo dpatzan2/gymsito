@@ -251,12 +251,12 @@ export default function UserHistory({ user, onBack }) {
         </section>
 
         <section className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 min-h-[50vh]">
-          <h3 className="text-lg font-semibold mb-4 px-1">Historial Fotográfico</h3>
+          <h3 className="text-lg font-semibold mb-4 px-1">Historial</h3>
           
           {loading ? (
             <p className="text-center text-gray-500 text-sm py-8">Cargando historial...</p>
           ) : history.length === 0 ? (
-            <p className="text-center text-gray-500 text-sm py-8">Este atleta aún no tiene registros.</p>
+            <p className="text-center text-gray-500 text-sm py-8">Sin registros.</p>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {history.map((record) => (
