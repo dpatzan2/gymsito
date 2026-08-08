@@ -9,24 +9,57 @@ export default function UserHistory({ user, onBack }) {
   
   const todayDateObj = useMemo(() => new Date(), [])
   
-  // Generar los ultimos meses
+  // Generar meses dinámicamente: solo incluir el mes actual y meses donde SÍ existan registros de asistencia
   const months = useMemo(() => {
-    const d = new Date()
-    d.setDate(1) // Para evitar problemas de fin de mes
-    const m = []
-    for (let i = 0; i < 6; i++) {
-      const date = new Date(d.getFullYear(), d.getMonth() - i, 1)
-      m.push({
-        year: date.getFullYear(),
-        month: date.getMonth(),
-        label: date.toLocaleString('es-ES', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase())
-      })
-    }
-    return m
-  }, [])
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth()
+
+    const monthMap = new Map()
+
+    // Siempre incluir el mes actual para dar seguimiento al progreso en curso
+    const currentKey = `${currentYear}-${currentMonth}`
+    monthMap.set(currentKey, { year: currentYear, month: currentMonth })
+
+    // Extraer meses únicos que tengan al menos 1 registro en el historial
+    history.forEach(record => {
+      if (!record.created_at) return
+      const d = new Date(record.created_at)
+      const year = d.getFullYear()
+      const month = d.getMonth()
+      const key = `${year}-${month}`
+      if (!monthMap.has(key)) {
+        monthMap.set(key, { year, month })
+      }
+    })
+
+    // Ordenar descendente (los más recientes primero)
+    const sorted = Array.from(monthMap.values()).sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year
+      return b.month - a.month
+    })
+
+    return sorted.map(m => {
+      const date = new Date(m.year, m.month, 1)
+      const labelStr = date.toLocaleString('es-ES', { month: 'long', year: 'numeric' })
+      const formattedLabel = labelStr.charAt(0).toUpperCase() + labelStr.slice(1)
+      return {
+        year: m.year,
+        month: m.month,
+        label: formattedLabel
+      }
+    })
+  }, [history])
 
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(0)
-  const selectedMonth = months[selectedMonthIdx]
+  
+  // Garantizar un índice válido si cambia el listado de meses
+  const safeMonthIdx = selectedMonthIdx < months.length ? selectedMonthIdx : 0
+  const selectedMonth = months[safeMonthIdx] || {
+    year: todayDateObj.getFullYear(),
+    month: todayDateObj.getMonth(),
+    label: todayDateObj.toLocaleString('es-ES', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase())
+  }
 
   // Historial filtrado estrictamente por el mes seleccionado
   const filteredHistory = useMemo(() => {
@@ -173,7 +206,7 @@ export default function UserHistory({ user, onBack }) {
           <div className="flex items-center gap-2 mb-3">
             <button
               onClick={() => setSelectedMonthIdx(prev => Math.min(months.length - 1, prev + 1))}
-              disabled={selectedMonthIdx >= months.length - 1}
+              disabled={safeMonthIdx >= months.length - 1}
               className="p-2 border border-gray-200 rounded-lg text-gray-600 bg-gray-50 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               title="Mes anterior"
             >
@@ -183,7 +216,7 @@ export default function UserHistory({ user, onBack }) {
             </button>
 
             <select
-              value={selectedMonthIdx}
+              value={safeMonthIdx}
               onChange={(e) => setSelectedMonthIdx(Number(e.target.value))}
               className="flex-1 p-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-800 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-black transition-colors"
             >
@@ -196,7 +229,7 @@ export default function UserHistory({ user, onBack }) {
 
             <button
               onClick={() => setSelectedMonthIdx(prev => Math.max(0, prev - 1))}
-              disabled={selectedMonthIdx === 0}
+              disabled={safeMonthIdx === 0}
               className="p-2 border border-gray-200 rounded-lg text-gray-600 bg-gray-50 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               title="Mes siguiente"
             >
@@ -358,9 +391,10 @@ export default function UserHistory({ user, onBack }) {
             </div>
           ) : filteredHistory.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center bg-gray-50/70 border border-dashed border-gray-200 rounded-xl">
-              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-xl mb-2 text-gray-400">
-                📷
-              </div>
+              <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <circle cx="12" cy="13" r="3" />
+              </svg>
               <h4 className="font-semibold text-gray-700 text-sm">Sin fotos en este mes</h4>
               <p className="text-xs text-gray-400 mt-1 max-w-xs">
                 No hay registros de asistencia para {selectedMonth.label.toLowerCase()}.
@@ -376,8 +410,8 @@ export default function UserHistory({ user, onBack }) {
                 >
                   {/* Badge si fue con Comodín */}
                   {record.is_comodin && (
-                    <div className="absolute top-2 left-2 z-10 bg-blue-600/90 backdrop-blur-md text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1">
-                      <span>🃏</span> Comodín
+                    <div className="absolute top-2 left-2 z-10 bg-blue-600/90 backdrop-blur-md text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                      Comodín
                     </div>
                   )}
 
@@ -443,8 +477,8 @@ export default function UserHistory({ user, onBack }) {
 
             <div className="relative max-w-full max-h-[75vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
               {selectedPhoto.is_comodin && (
-                <span className="absolute top-3 left-3 z-10 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 backdrop-blur-md">
-                  🃏 Asistencia por Comodín
+                <span className="absolute top-3 left-3 z-10 bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg backdrop-blur-md">
+                  Asistencia por Comodín
                 </span>
               )}
               <img
