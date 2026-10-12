@@ -2,6 +2,17 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
 import UserHistory from './UserHistory'
 
+const dayNames = {1:'Lunes', 2:'Martes', 3:'Miércoles', 4:'Jueves', 5:'Viernes', 6:'Sábado', 7:'Domingo'}
+
+// Lunes 00:00 de la semana en curso
+const getMonday = () => {
+  const now = new Date()
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - (now.getDay() || 7) + 1)
+  monday.setHours(0, 0, 0, 0)
+  return monday
+}
+
 export default function Dashboard({ session, profile }) {
   const [gyms, setGyms] = useState([])
   const [leaderboard, setLeaderboard] = useState([])
@@ -16,6 +27,7 @@ export default function Dashboard({ session, profile }) {
   const [weeklyCheckins, setWeeklyCheckins] = useState([])
   const [comodinCheckins, setComodinCheckins] = useState([])
   const [replacedCheckins, setReplacedCheckins] = useState([])
+  const [weekRecords, setWeekRecords] = useState([])
   const [isResetting, setIsResetting] = useState(false)
   const [resetStatus, setResetStatus] = useState({ readyCount: 0, totalCount: 0, isReady: false })
   const videoRef = useRef(null)
@@ -107,18 +119,11 @@ export default function Dashboard({ session, profile }) {
   }
 
   const fetchWeeklyCheckins = async () => {
-    const now = new Date()
-    const currentDayOfWeek = now.getDay() || 7
-    // Calcular el lunes de esta semana
-    const monday = new Date(now)
-    monday.setDate(now.getDate() - currentDayOfWeek + 1)
-    monday.setHours(0, 0, 0, 0)
-
     const { data } = await supabase
       .from('check_ins')
-      .select('created_at, is_comodin, replaced_day')
+      .select('id, created_at, is_comodin, replaced_day')
       .eq('user_id', session.user.id)
-      .gte('created_at', monday.toISOString())
+      .gte('created_at', getMonday().toISOString())
 
     if (data) {
       // Guardamos IDs de los días (1-7) en los que asistió normalmente
@@ -139,7 +144,22 @@ export default function Dashboard({ session, profile }) {
       setWeeklyCheckins(attendedNormalDays)
       setComodinCheckins(attendedComodinDays)
       setReplacedCheckins(replacedTargetDays)
+      setWeekRecords(data)
     }
+  }
+
+  // Editar comodín de un registro ya publicado (solo semana en curso)
+  const updateComodin = async (id, value) => {
+    const { error: updateError } = await supabase
+      .from('check_ins')
+      .update({ is_comodin: value !== '', replaced_day: value !== '' ? parseInt(value) : null })
+      .eq('id', id)
+      .eq('user_id', session.user.id)
+      .gte('created_at', getMonday().toISOString())
+
+    if (updateError) window.alert('No se pudo actualizar el comodín.')
+    fetchWeeklyCheckins()
+    fetchLeaderboard()
   }
 
   const fetchGyms = async () => {
@@ -571,6 +591,32 @@ export default function Dashboard({ session, profile }) {
               )
             })}
           </div>
+
+          {/* Editar comodín de registros de esta semana en días libres */}
+          {weekRecords
+            .filter(r => !profile?.target_days?.includes(new Date(r.created_at).getDay() || 7))
+            .map(r => {
+              const options = profile?.target_days?.filter(d =>
+                !weeklyCheckins.includes(d) && (!replacedCheckins.includes(d) || d === r.replaced_day)
+              ) || []
+              return (
+                <div key={r.id} className="mt-4 flex items-center justify-between gap-2 text-xs">
+                  <span className="font-medium text-gray-700">
+                    Registro del {dayNames[new Date(r.created_at).getDay() || 7]}
+                  </span>
+                  <select
+                    value={r.replaced_day ?? ''}
+                    onChange={(e) => updateComodin(r.id, e.target.value)}
+                    className="p-1.5 border border-gray-200 rounded text-xs bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-black"
+                  >
+                    <option value="">Sin comodín</option>
+                    {options.map(d => (
+                      <option key={d} value={d}>Comodín: {dayNames[d]}</option>
+                    ))}
+                  </select>
+                </div>
+              )
+            })}
         </section>
 
         {/* Camara / Checkin */}
@@ -646,7 +692,6 @@ export default function Dashboard({ session, profile }) {
                     Hoy no es tu día asignado
                   </p>
                   {(() => {
-                    const dayNames = {1:'Lunes', 2:'Martes', 3:'Miércoles', 4:'Jueves', 5:'Viernes', 6:'Sábado', 7:'Domingo'}
                     const availableMissedDays = profile?.target_days?.filter(day => 
                       !weeklyCheckins.includes(day) && !replacedCheckins.includes(day)
                     ) || []
