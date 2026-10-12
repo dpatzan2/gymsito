@@ -312,6 +312,23 @@ export default function Dashboard({ session, profile }) {
     init()
   }, [])
 
+  // Gesto/botón "atrás" del celular: cerrar el historial abierto o quedarse en la app
+  // (si no, regresa al login de Google y da error 400)
+  useEffect(() => {
+    window.history.pushState({ guard: true }, '')
+    const onPop = () => {
+      setViewingUser(null)
+      if (!window.history.state) window.history.pushState({ guard: true }, '')
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  const openUserHistory = (user) => {
+    window.history.pushState({ viewingUser: true }, '')
+    setViewingUser(user)
+  }
+
   // Asignar el stream al elemento de video una vez que se renderice en pantalla
   useEffect(() => {
     if (stream && videoRef.current) {
@@ -459,7 +476,7 @@ export default function Dashboard({ session, profile }) {
   }
 
   if (viewingUser) {
-    return <UserHistory user={viewingUser} onBack={() => setViewingUser(null)} />
+    return <UserHistory user={viewingUser} onBack={() => window.history.back()} />
   }
 
   const shareLeaderboard = async () => {
@@ -814,7 +831,7 @@ export default function Dashboard({ session, profile }) {
               leaderboard.map((user, idx) => (
                 <div 
                   key={user.user_id} 
-                  onClick={() => setViewingUser(user)}
+                  onClick={() => openUserHistory(user)}
                   className="flex items-center p-3 rounded-lg border border-gray-100 bg-gray-50 flex-wrap cursor-pointer hover:bg-gray-100 hover:border-gray-200 transition-colors"
                 >
                   <div className="text-sm font-medium w-6 text-gray-400">
